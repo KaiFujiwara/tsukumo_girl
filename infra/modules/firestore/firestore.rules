@@ -1,0 +1,69 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ユーザー認証関数
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+    
+    // ユーザーデータ
+    match /users/{userId} {
+      // 自分のユーザーデータのみ読み書き可能
+      allow read, write: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // キャラクターデータ
+    match /characters/{characterId} {
+      // 認証済みユーザーは読み取り可能
+      allow read: if isAuthenticated();
+      // 作成・更新は サーバーサイドのみ（API経由）
+      allow create, update: if false; // API経由のみ
+    }
+    
+    // ユーザー・キャラクター関係
+    match /user_characters/{relationshipId} {
+      // 自分の関係データのみ読み取り可能
+      allow read: if isAuthenticated() && 
+        isOwner(resource.data.user_id);
+      // 作成・更新はAPI経由のみ
+      allow create, update: if false;
+    }
+    
+    // メッセージ
+    match /messages/{messageId} {
+      // 自分に関連するメッセージのみ読み取り可能
+      allow read: if isAuthenticated() && 
+        isOwner(resource.data.user_id);
+      // 作成・更新はAPI経由のみ  
+      allow create, update: if false;
+    }
+    
+    // 好感度ログ
+    match /affection_logs/{logId} {
+      // 自分に関連するログのみ読み取り可能
+      allow read: if isAuthenticated() && 
+        isOwner(resource.data.user_id);
+      // 作成・更新はAPI経由のみ
+      allow create, update: if false;
+    }
+    
+    // 所有権履歴
+    match /ownership_history/{historyId} {
+      // 認証済みユーザーは読み取り可能
+      allow read: if isAuthenticated();
+      // 作成・更新はAPI経由のみ
+      allow create, update: if false;
+    }
+    
+    %{ if environment == "dev" ~}
+    // 開発環境では管理者権限でアクセス可能
+    match /{document=**} {
+      allow read, write: if request.auth.token.admin == true;
+    }
+    %{ endif ~}
+  }
+}
